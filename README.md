@@ -1,1 +1,7 @@
-# quest-contract-zilliqa
+# Contract (Scilla)
+
+### test
+
+```
+$ docker-compose up
+```

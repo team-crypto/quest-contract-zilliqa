@@ -1,0 +1,43 @@
+library RoomLibrary
+
+let zero = Uint128 0
+
+let one_msg = 
+	fun (msg : Message) => 
+	let nil_msg = Nil {Message} in
+	Cons {Message} msg nil_msg
+
+(* a > b *)
+let gt =
+	fun (a : Uint128) =>
+	fun (b : Uint128) =>
+		let ret = builtin lt b a in
+		ret
+
+let ge =
+	fun (a : Uint128) =>
+	fun (b : Uint128) =>
+		let c = builtin eq a b in
+		match c with
+		| True =>
+			True
+		| False =>
+			let ret = gt a b in
+			ret
+		end
+
+let andb_4 =
+	fun (a : Bool) =>
+	fun (b : Bool) =>
+	fun (c : Bool) =>
+	fun (d : Bool) =>
+		let ab = andb a b in
+		let cd = andb c d in
+		andb ab cd
+
+let andb_3 =
+	fun (a : Bool) =>
+	fun (b : Bool) =>
+	fun (c : Bool) =>
+		let ab = andb a b in
+		andb ab c

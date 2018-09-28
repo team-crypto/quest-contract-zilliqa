@@ -1,0 +1,21 @@
+{
+  "name": "scilla-contract",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "jasmine",
+    "blockchain": "node ./node_modules/kaya/server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "jasmine": "^3.2.0"
+  },
+  "dependencies": {
+    "bignumber.js": "^7.2.1",
+    "bn.js": "^4.11.8",
+    "kaya": "Zilliqa/kaya#master",
+    "zilliqa-js": "^0.1.11"
+  }
+}

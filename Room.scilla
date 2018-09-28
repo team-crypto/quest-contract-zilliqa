@@ -1,0 +1,253 @@
+import BoolUtils
+
+library Room
+
+let zero = Uint128 0
+
+let one_msg = 
+    fun (msg : Message) => 
+    let nil_msg = Nil {Message} in
+    Cons {Message} msg nil_msg
+
+(* a > b *)
+let gt =
+    fun (a : Uint128) =>
+    fun (b : Uint128) =>
+        let ret = builtin lt b a in
+        ret
+
+let ge =
+    fun (a : Uint128) =>
+    fun (b : Uint128) =>
+        let c = builtin eq a b in
+        match c with
+        | True =>
+            True
+        | False =>
+            let ret = gt a b in
+            ret
+        end
+
+let andb_4 =
+    fun (a : Bool) =>
+    fun (b : Bool) =>
+    fun (c : Bool) =>
+    fun (d : Bool) =>
+        let ab = andb a b in
+        let cd = andb c d in
+        andb ab cd
+
+let andb_3 =
+    fun (a : Bool) =>
+    fun (b : Bool) =>
+    fun (c : Bool) =>
+        let ab = andb a b in
+        andb ab c
+
+let set_deactive_code = Int32 1
+let set_active_code   = Int32 2
+let deposit_code      = Int32 3
+let reward_code       = Int32 4
+let refund_code       = Int32 5
+
+let not_owner_code         = Int32 256
+let already_deactive_code  = Int32 257
+let already_active_code    = Int32 258
+let amount_invalid_code    = Int32 259
+let reward_invalid_code    = Int32 260
+let no_enough_balance_code = Int32 261
+let self_reward_error_code = Int32 262
+let refund_is_only_when_deactive_code = Int32 263
+
+contract Room
+(owner: ByStr20)
+
+field active : Bool = False
+
+transition deactivate ()
+    flag_owner = builtin eq owner _sender;
+    flag_active <- active;
+    pass_flag = andb flag_owner flag_active;
+
+    match pass_flag with
+    | True =>
+        false = False;
+        active := false;
+        e = { _eventname : "Deactivate" };
+        event e;
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; code : set_deactive_code};
+        msgs = one_msg msg;
+        send msgs
+    | False =>
+    end;
+
+    (* error *)
+    match flag_owner with
+    | False =>
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; code : not_owner_code};
+        msgs = one_msg msg;
+        send msgs
+    | True =>
+    end;
+    match flag_active with
+    | False =>
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; code : already_deactive_code};
+        msgs = one_msg msg;
+        send msgs
+    | True =>
+    end
+end
+
+transition activate ()
+    flag_owner = builtin eq owner _sender;
+    flag_active <- active;
+    flag_not_active = negb flag_active;
+    pass_flag = andb flag_owner flag_not_active;
+
+    match pass_flag with
+    | True =>
+        true = True;
+        active := true;
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; code : set_active_code};
+        msgs = one_msg msg;
+        send msgs;
+        e = { _eventname : "Activate" };
+        event e
+    | False =>
+    end;
+
+    match flag_owner with
+    | False =>
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; code : not_owner_code};
+        msgs = one_msg msg;
+        send msgs
+    | True =>
+    end;
+    match flag_not_active with
+    | False =>
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; code : already_active_code};
+        msgs = one_msg msg;
+        send msgs
+    | True =>
+    end
+end
+
+transition deposit ()
+    flag_zeroBalance = gt _amount zero;
+    match flag_zeroBalance with
+    | True =>
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; code : deposit_code};
+        msgs = one_msg msg;
+        send msgs;
+        e = { _eventname : "Deposited"; _depositor : _sender; _depositedValue : _amount };
+        event e;
+        accept
+    | False =>
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; code : amount_invalid_code};
+        msgs = one_msg msg;
+        send msgs
+    end
+end
+
+transition sendReward (_reward : Uint128, _dest : ByStr20)
+    balance <- _balance;
+    flag_owner = builtin eq owner _sender;
+    flag_zeroReward = gt _reward zero;
+    flag_selfReward = builtin eq owner _dest;
+    flag_enoughBalance = ge balance _reward;
+
+    flag_not_selfReward = negb flag_selfReward;
+
+    pass_flag = andb_4 flag_owner flag_zeroReward flag_not_selfReward flag_enoughBalance;
+
+
+    match pass_flag with
+    | True =>
+        msg = {_tag : "Main"; _recipient : _sender; _amount : _reward; code : reward_code};
+        msgs = one_msg msg;
+        send msgs;
+        e = { _eventname : "RewardSent"; _reward : _reward; _dest : _dest };
+        event e
+    | False =>
+    end;
+
+    match flag_owner with
+    | False =>
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; code : not_owner_code};
+        msgs = one_msg msg;
+        send msgs
+    | True =>
+    end;
+
+    match flag_zeroReward with
+    | False =>
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; code : reward_invalid_code};
+        msgs = one_msg msg;
+        send msgs
+    | True =>
+    end;
+
+    match flag_enoughBalance with
+    | False =>
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; code : no_enough_balance_code};
+        msgs = one_msg msg;
+        send msgs
+    | True =>
+    end;
+
+    match flag_not_selfReward with
+    | False =>
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; code : self_reward_error_code};
+        msgs = one_msg msg;
+        send msgs
+    | True =>
+    end
+
+end
+
+transition refundToOwner()
+    balance <- _balance;
+    flag_owner = builtin eq owner _sender;
+    flag_active <- active;
+    flag_enoughBalance = gt balance zero;
+
+    flag_not_active = negb flag_active;
+
+    pass_flag = andb_3 flag_owner flag_not_active flag_enoughBalance;
+
+    match pass_flag with
+    | True =>
+        refundedBalance = balance;
+        msg = {_tag : "Main"; _recipient : owner; _amount : refundedBalance; code : refund_code};
+        msgs = one_msg msg;
+        send msgs;
+        e = { _eventname : "RefundedToOwner"; _refundedBalance : refundedBalance };
+        event e
+    | False =>
+    end;
+
+    match flag_owner with
+    | False =>
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; code : not_owner_code};
+        msgs = one_msg msg;
+        send msgs
+    | True =>
+    end;
+
+    match flag_not_active with
+    | False =>
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; code : refund_is_only_when_deactive_code};
+        msgs = one_msg msg;
+        send msgs
+    | True =>
+    end;
+
+    match flag_enoughBalance with
+    | False =>
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; code : no_enough_balance_code};
+        msgs = one_msg msg;
+        send msgs
+    | True =>
+    end
+
+end
